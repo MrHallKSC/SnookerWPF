@@ -1,0 +1,254 @@
+﻿<Window x:Class="SnookerGame.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:SnookerGame"
+        mc:Ignorable="d"
+                Title="Snooker Game - A Level NEA Exemplar"
+        Height="700"
+        Width="1000"
+        Background="#1a1a1a"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanMinimize">
+    <!-- 
+    Main Window Layout
+    
+    Structure:
+    - Top: Score panel showing both players' information
+    - Centre: Game canvas where table and balls are rendered
+    - Bottom: Status bar with game messages and power indicator
+    
+    Using a DockPanel allows elements to dock to edges with the 
+    remaining space filled by the canvas.
+    -->
+
+    <DockPanel LastChildFill="True">
+
+        <!-- 
+        ========== TOP PANEL: Player Scores ========== 
+        Docked to top of window.
+        Shows both players' names, scores, and current break.
+        -->
+        <Grid DockPanel.Dock="Top" 
+              Background="#2d2d2d" 
+              Height="80">
+
+            <Grid.ColumnDefinitions>
+                <!-- Player 1 info - left side -->
+                <ColumnDefinition Width="*"/>
+                <!-- Centre - frame score and game info -->
+                <ColumnDefinition Width="Auto"/>
+                <!-- Player 2 info - right side -->
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Player 1 Panel -->
+            <StackPanel Grid.Column="0" 
+                        Margin="20,10" 
+                        HorizontalAlignment="Left">
+
+                <TextBlock x:Name="lblPlayer1Name"
+                           Text="Player 1"
+                           FontSize="18"
+                           FontWeight="Bold"
+                           Foreground="White"/>
+
+                <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                    <TextBlock Text="Score: "
+                               FontSize="24"
+                               Foreground="LightGray"/>
+                    <TextBlock x:Name="lblPlayer1Score"
+                               Text="0"
+                               FontSize="24"
+                               FontWeight="Bold"
+                               Foreground="#4CAF50"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Break: "
+                               FontSize="14"
+                               Foreground="Gray"/>
+                    <TextBlock x:Name="lblPlayer1Break"
+                               Text="0"
+                               FontSize="14"
+                               Foreground="Yellow"/>
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Centre Panel - Frame Info -->
+            <StackPanel Grid.Column="1" 
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Center"
+                        Margin="40,0">
+
+                <TextBlock x:Name="lblFrameInfo"
+                           Text="Frame 1"
+                           FontSize="16"
+                           Foreground="White"
+                           HorizontalAlignment="Center"/>
+
+                <TextBlock x:Name="lblCurrentPlayer"
+                           Text="Player 1 to play"
+                           FontSize="14"
+                           Foreground="Yellow"
+                           HorizontalAlignment="Center"
+                           Margin="0,5,0,0"/>
+
+                <TextBlock x:Name="lblTargetBall"
+                           Text="Target: Red"
+                           FontSize="12"
+                           Foreground="LightGray"
+                           HorizontalAlignment="Center"
+                           Margin="0,5,0,0"/>
+            </StackPanel>
+
+            <!-- Player 2 Panel -->
+            <StackPanel Grid.Column="2" 
+                        Margin="20,10" 
+                        HorizontalAlignment="Right">
+
+                <TextBlock x:Name="lblPlayer2Name"
+                           Text="Player 2"
+                           FontSize="18"
+                           FontWeight="Bold"
+                           Foreground="White"
+                           HorizontalAlignment="Right"/>
+
+                <StackPanel Orientation="Horizontal" 
+                            HorizontalAlignment="Right"
+                            Margin="0,5,0,0">
+                    <TextBlock Text="Score: "
+                               FontSize="24"
+                               Foreground="LightGray"/>
+                    <TextBlock x:Name="lblPlayer2Score"
+                               Text="0"
+                               FontSize="24"
+                               FontWeight="Bold"
+                               Foreground="#4CAF50"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <TextBlock Text="Break: "
+                               FontSize="14"
+                               Foreground="Gray"/>
+                    <TextBlock x:Name="lblPlayer2Break"
+                               Text="0"
+                               FontSize="14"
+                               Foreground="Yellow"/>
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+
+        <!-- 
+        ========== BOTTOM PANEL: Status Bar ========== 
+        Docked to bottom of window.
+        Shows game messages, instructions, and shot power.
+        -->
+        <Grid DockPanel.Dock="Bottom" 
+              Background="#2d2d2d" 
+              Height="60">
+
+            <Grid.ColumnDefinitions>
+                <!-- Status message - left -->
+                <ColumnDefinition Width="*"/>
+                <!-- Power bar - centre -->
+                <ColumnDefinition Width="200"/>
+                <!-- Instructions - right -->
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Status Message -->
+            <TextBlock x:Name="lblStatus"
+                       Grid.Column="0"
+                       Text="Click and hold to charge shot, release to play"
+                       FontSize="14"
+                       Foreground="LightGray"
+                       VerticalAlignment="Center"
+                       Margin="20,0"/>
+
+            <!-- Power Bar Container -->
+            <StackPanel Grid.Column="1" 
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Center">
+
+                <TextBlock Text="Shot Power"
+                           FontSize="12"
+                           Foreground="Gray"
+                           HorizontalAlignment="Center"/>
+
+                <!-- Power bar background -->
+                <Border BorderBrush="Gray" 
+                        BorderThickness="1" 
+                        Height="20" 
+                        Width="180"
+                        Margin="0,5,0,0">
+
+                    <!-- Power bar fill (width adjusted in code) -->
+                    <Rectangle x:Name="rectPowerBar"
+                               Fill="Green"
+                               Width="0"
+                               HorizontalAlignment="Left"/>
+                </Border>
+
+                <TextBlock x:Name="lblPowerPercent"
+                           Text="0%"
+                           FontSize="12"
+                           Foreground="White"
+                           HorizontalAlignment="Center"
+                           Margin="0,2,0,0"/>
+            </StackPanel>
+
+            <!-- Instructions / Reds Remaining -->
+            <StackPanel Grid.Column="2" 
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Right"
+                        Margin="20,0">
+
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Reds remaining: "
+                               FontSize="14"
+                               Foreground="Gray"/>
+                    <TextBlock x:Name="lblRedsRemaining"
+                               Text="15"
+                               FontSize="14"
+                               FontWeight="Bold"
+                               Foreground="Red"/>
+                </StackPanel>
+
+                <TextBlock x:Name="lblPointsOnTable"
+                           Text="Points on table: 147"
+                           FontSize="12"
+                           Foreground="Gray"
+                           Margin="0,5,0,0"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- 
+        ========== CENTRE: Game Canvas ========== 
+        Fills remaining space.
+        This is where the table, balls, and all game graphics are rendered.
+        The canvas is wrapped in a border for visual separation.
+        -->
+        <Border Background="#1a1a1a" 
+                Padding="20">
+
+            <!-- 
+            The Canvas element is the drawing surface.
+            All game rendering happens here via code-behind.
+            
+            ClipToBounds="True" prevents drawings from appearing 
+            outside the canvas boundaries.
+            
+            Mouse events are captured here for aiming and shooting.
+            -->
+            <Canvas x:Name="gameCanvas"
+                    Background="#0d3d0d"
+                    ClipToBounds="True"
+                    MouseMove="GameCanvas_MouseMove"
+                    MouseLeftButtonDown="GameCanvas_MouseLeftButtonDown"
+                    MouseLeftButtonUp="GameCanvas_MouseLeftButtonUp"/>
+        </Border>
+
+    </DockPanel>
+</Window>
