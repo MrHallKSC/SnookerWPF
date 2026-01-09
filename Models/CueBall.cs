@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Windows;
 using System.Windows.Media;
 using System.Windows.Controls;
 using System.Windows.Shapes;
@@ -164,13 +165,13 @@ namespace SnookerGame.Models
         }
 
         /// <summary>
-        /// Increases shot power while player holds the shot button.
-        /// Power increases over time up to maximum.
+        /// Adjusts shot power while player holds the shot button.
+        /// Power can increase or decrease for oscillating power meter.
         /// </summary>
-        /// <param name="increment">Amount to add (typically based on time held)</param>
+        /// <param name="increment">Amount to add (can be negative)</param>
         public void ChargePower(double increment)
         {
-            shotPower = Math.Min(1.0, shotPower + increment);
+            shotPower = Math.Max(0, Math.Min(1.0, shotPower + increment));
         }
 
         /// <summary>
@@ -379,6 +380,120 @@ namespace SnookerGame.Models
             };
 
             canvas.Children.Add(aimLine);
+        }
+
+
+        /// <summary>
+        /// Draws the cue stick behind the cue ball.
+        /// The cue is positioned opposite to the aim direction and
+        /// pulls back as shot power increases.
+        /// </summary>
+        /// <param name="canvas">Canvas to draw on</param>
+        public void DrawCue(Canvas canvas)
+        {
+            if (!IsOnTable || IsMoving || isInHand) return;
+
+            // Cue dimensions
+            double cueLength = 250.0;
+            double cueTipWidth = 3.0;
+            double cueButtWidth = 8.0;
+            double maxPullback = 80.0;
+            double tipGap = 5.0;
+
+            // Calculate pullback distance based on shot power
+            double pullback = tipGap + (shotPower * maxPullback);
+
+            // Calculate the angle opposite to aim direction (cue is behind the ball)
+            double cueAngle = aimAngle + Math.PI;
+
+            // Calculate tip position (closest to ball, pulled back)
+            double tipX = Position.X + Math.Cos(cueAngle) * pullback;
+            double tipY = Position.Y + Math.Sin(cueAngle) * pullback;
+
+            // Calculate butt position (end of cue, further from ball)
+            double buttX = tipX + Math.Cos(cueAngle) * cueLength;
+            double buttY = tipY + Math.Sin(cueAngle) * cueLength;
+
+            // Calculate perpendicular angle for cue width
+            double perpAngle = cueAngle + (Math.PI / 2);
+
+            // Calculate the four corners of the tapered cue body
+            double tipLeftX = tipX + Math.Cos(perpAngle) * (cueTipWidth / 2);
+            double tipLeftY = tipY + Math.Sin(perpAngle) * (cueTipWidth / 2);
+
+            double tipRightX = tipX - Math.Cos(perpAngle) * (cueTipWidth / 2);
+            double tipRightY = tipY - Math.Sin(perpAngle) * (cueTipWidth / 2);
+
+            double buttLeftX = buttX + Math.Cos(perpAngle) * (cueButtWidth / 2);
+            double buttLeftY = buttY + Math.Sin(perpAngle) * (cueButtWidth / 2);
+
+            double buttRightX = buttX - Math.Cos(perpAngle) * (cueButtWidth / 2);
+            double buttRightY = buttY - Math.Sin(perpAngle) * (cueButtWidth / 2);
+
+            // Create the main cue body (wooden part)
+            Polygon cueBody = new Polygon();
+            cueBody.Points = new PointCollection();
+            cueBody.Points.Add(new Point(tipLeftX, tipLeftY));
+            cueBody.Points.Add(new Point(buttLeftX, buttLeftY));
+            cueBody.Points.Add(new Point(buttRightX, buttRightY));
+            cueBody.Points.Add(new Point(tipRightX, tipRightY));
+            cueBody.Fill = new SolidColorBrush(Color.FromRgb(139, 90, 43));
+            cueBody.Stroke = new SolidColorBrush(Color.FromRgb(101, 67, 33));
+            cueBody.StrokeThickness = 1;
+            canvas.Children.Add(cueBody);
+
+            // Draw the ferrule (white band near tip)
+            double ferruleLength = 8.0;
+            double ferruleEndX = tipX + Math.Cos(cueAngle) * ferruleLength;
+            double ferruleEndY = tipY + Math.Sin(cueAngle) * ferruleLength;
+
+            double ferruleLeftX = ferruleEndX + Math.Cos(perpAngle) * (cueTipWidth / 2);
+            double ferruleLeftY = ferruleEndY + Math.Sin(perpAngle) * (cueTipWidth / 2);
+
+            double ferruleRightX = ferruleEndX - Math.Cos(perpAngle) * (cueTipWidth / 2);
+            double ferruleRightY = ferruleEndY - Math.Sin(perpAngle) * (cueTipWidth / 2);
+
+            Polygon ferrule = new Polygon();
+            ferrule.Points = new PointCollection();
+            ferrule.Points.Add(new Point(tipLeftX, tipLeftY));
+            ferrule.Points.Add(new Point(ferruleLeftX, ferruleLeftY));
+            ferrule.Points.Add(new Point(ferruleRightX, ferruleRightY));
+            ferrule.Points.Add(new Point(tipRightX, tipRightY));
+            ferrule.Fill = new SolidColorBrush(Colors.Ivory);
+            ferrule.Stroke = new SolidColorBrush(Colors.LightGray);
+            ferrule.StrokeThickness = 0.5;
+            canvas.Children.Add(ferrule);
+
+            // Draw the tip (blue chalk) as a small circle
+            Ellipse tip = new Ellipse();
+            tip.Width = cueTipWidth + 1;
+            tip.Height = cueTipWidth + 1;
+            tip.Fill = new SolidColorBrush(Color.FromRgb(70, 130, 180));
+            Canvas.SetLeft(tip, tipX - (cueTipWidth + 1) / 2);
+            Canvas.SetTop(tip, tipY - (cueTipWidth + 1) / 2);
+            canvas.Children.Add(tip);
+
+            // Draw butt cap (rubber end)
+            double capLength = 15.0;
+            double capStartX = buttX - Math.Cos(cueAngle) * capLength;
+            double capStartY = buttY - Math.Sin(cueAngle) * capLength;
+
+            double capStartLeftX = capStartX + Math.Cos(perpAngle) * (cueButtWidth / 2);
+            double capStartLeftY = capStartY + Math.Sin(perpAngle) * (cueButtWidth / 2);
+
+            double capStartRightX = capStartX - Math.Cos(perpAngle) * (cueButtWidth / 2);
+            double capStartRightY = capStartY - Math.Sin(perpAngle) * (cueButtWidth / 2);
+
+            Polygon buttCap = new Polygon();
+            buttCap.Points = new PointCollection();
+            buttCap.Points.Add(new Point(capStartLeftX, capStartLeftY));
+            buttCap.Points.Add(new Point(buttLeftX, buttLeftY));
+            buttCap.Points.Add(new Point(buttRightX, buttRightY));
+            buttCap.Points.Add(new Point(capStartRightX, capStartRightY));
+            buttCap.Fill = new SolidColorBrush(Color.FromRgb(40, 40, 40));
+            buttCap.Stroke = new SolidColorBrush(Colors.Black);
+            buttCap.StrokeThickness = 0.5;
+            canvas.Children.Add(buttCap);
         }
 
         /// <summary>

@@ -1,12 +1,13 @@
-﻿using System;
+﻿using SnookerGame.Engine;
+using SnookerGame.Models;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
-using SnookerGame.Models;
-using SnookerGame.Engine;
 
 namespace SnookerGame
 {
@@ -69,10 +70,19 @@ namespace SnookerGame
         private bool isChargingShot;
         private Vector2D mousePosition;
 
+        // Power meter oscillation
+        private bool powerIncreasing;
+
         // Game state tracking
         private bool ballsMoving;
         private List<Ball> pottedThisShot;
         private bool firstCollisionRecorded;
+
+        // Message overlay
+        private string overlayMessage;
+        private DateTime overlayMessageTime;
+        private double overlayDuration;
+        private Color overlayBackgroundColor;
 
         // Offset for centring table on canvas
         private double canvasOffsetX;
@@ -134,6 +144,13 @@ namespace SnookerGame
             ballsMoving = false;
             pottedThisShot = new List<Ball>();
             firstCollisionRecorded = false;
+            powerIncreasing = true;
+
+            // Initialise overlay message
+            overlayMessage = "";
+            overlayMessageTime = DateTime.MinValue;
+            overlayDuration = 0;
+            overlayBackgroundColor = Colors.Black;
 
             // Update UI to show initial state
             UpdateUI();
@@ -448,6 +465,10 @@ namespace SnookerGame
             {
                 Debug.WriteLine($"{colouredBall.Type} ball potted - {colouredBall.PointValue} points!");
                 lblStatus.Text = $"{colouredBall.Type} potted! ({colouredBall.PointValue} points)";
+
+                // Show potted message with green background
+                ShowOverlayMessage($"{colouredBall.Type} Potted!\n+{colouredBall.PointValue} Points",
+                    1.5, Color.FromArgb(200, 0, 100, 0));
             }
         }
 
@@ -458,11 +479,27 @@ namespace SnookerGame
         {
             Debug.WriteLine("Shot complete - all balls stopped");
 
+            // Store current player before processing (to detect turn change)
+            Player playerBeforeProcessing = gameManager.CurrentPlayer;
+
             // Let game manager process the shot result
             gameManager.ProcessShot();
 
             // Update UI based on game state
             UpdateUI();
+
+            // Show foul message if applicable
+            if (gameManager.FoulCommitted)
+            {
+                ShowOverlayMessage($"FOUL!\n{gameManager.FoulReason}",
+                    2.5, Color.FromArgb(200, 180, 0, 0));
+            }
+            // Check if turn changed (player switched)
+            else if (gameManager.CurrentPlayer != playerBeforeProcessing)
+            {
+                ShowOverlayMessage($"{gameManager.CurrentPlayer.Name}'s Turn",
+                    2.0, Color.FromArgb(200, 0, 0, 100));
+            }
 
             // Handle game state
             switch (gameManager.State)
@@ -481,17 +518,15 @@ namespace SnookerGame
 
                 case GameState.FrameOver:
                     lblStatus.Text = $"Frame over! {gameManager.GetFrameWinner().Name} wins!";
+                    ShowOverlayMessage($"Frame Over!\n{gameManager.GetFrameWinner().Name} Wins!",
+                        3.0, Color.FromArgb(220, 0, 80, 0));
                     break;
 
                 case GameState.MatchOver:
                     lblStatus.Text = $"Match over! {gameManager.GetMatchWinner().Name} wins the match!";
+                    ShowOverlayMessage($"Match Over!\n{gameManager.GetMatchWinner().Name} Wins the Match!",
+                        5.0, Color.FromArgb(220, 150, 120, 0));
                     break;
-            }
-
-            // Show foul message if applicable
-            if (gameManager.FoulCommitted)
-            {
-                lblStatus.Text = $"FOUL: {gameManager.FoulReason}";
             }
 
             // Clear potted balls list for next shot
@@ -570,14 +605,35 @@ namespace SnookerGame
         }
 
         /// <summary>
-        /// Increases shot power while mouse button is held.
+        /// Increases or decreases shot power while mouse button is held.
+        /// Power oscillates between 0 and 100% creating a timing challenge.
         /// </summary>
         /// <param name="deltaTime">Time since last frame</param>
         private void UpdateShotPower(double deltaTime)
         {
-            // Charge rate - full power in about 2 seconds
-            double chargeRate = 0.5;
-            cueBall.ChargePower(chargeRate * deltaTime);
+            // Charge rate - full power in about 1.5 seconds
+            double chargeRate = 0.7;
+
+            if (powerIncreasing)
+            {
+                cueBall.ChargePower(chargeRate * deltaTime);
+
+                // If reached max, start decreasing
+                if (cueBall.ShotPower >= 1.0)
+                {
+                    powerIncreasing = false;
+                }
+            }
+            else
+            {
+                cueBall.ChargePower(-chargeRate * deltaTime);
+
+                // If reached min, start increasing
+                if (cueBall.ShotPower <= 0.0)
+                {
+                    powerIncreasing = true;
+                }
+            }
 
             // Update power bar UI
             UpdatePowerBarDisplay();
@@ -627,11 +683,21 @@ namespace SnookerGame
             // Draw all balls
             DrawBalls();
 
-            // Draw aiming line if player is aiming and balls aren't moving
-            if (isAiming && !ballsMoving && !cueBall.IsInHand)
+            // Draw aiming line and cue if player is aiming and balls aren't moving
+            if (!ballsMoving && !cueBall.IsInHand)
             {
-                DrawAimLine();
+                // Draw aim line first (behind cue)
+                if (isAiming)
+                {
+                    DrawAimLine();
+                }
+
+                // Draw the cue stick
+                DrawCue();
             }
+
+            // Draw overlay message on top of everything
+            DrawOverlayMessage();
         }
 
         /// <summary>
@@ -690,13 +756,30 @@ namespace SnookerGame
             System.Windows.Controls.Canvas aimCanvas = new System.Windows.Controls.Canvas();
 
             // Draw the aim line (length 200 pixels)
-            cueBall.DrawAimLine(aimCanvas, 200);
+            cueBall.DrawAimLine(aimCanvas, 150);
 
             // Position with offset
             System.Windows.Controls.Canvas.SetLeft(aimCanvas, canvasOffsetX);
             System.Windows.Controls.Canvas.SetTop(aimCanvas, canvasOffsetY);
 
             gameCanvas.Children.Add(aimCanvas);
+        }
+
+        /// <summary>
+        /// Draws the cue stick behind the cue ball.
+        /// </summary>
+        private void DrawCue()
+        {
+            System.Windows.Controls.Canvas cueCanvas = new System.Windows.Controls.Canvas();
+
+            // Draw the cue
+            cueBall.DrawCue(cueCanvas);
+
+            // Position with offset
+            System.Windows.Controls.Canvas.SetLeft(cueCanvas, canvasOffsetX);
+            System.Windows.Controls.Canvas.SetTop(cueCanvas, canvasOffsetY);
+
+            gameCanvas.Children.Add(cueCanvas);
         }
 
         #endregion
@@ -741,6 +824,7 @@ namespace SnookerGame
             else if (!cueBall.IsMoving)
             {
                 isChargingShot = true;
+                powerIncreasing = true;  // Reset to increasing
                 cueBall.ResetPower();
 
                 lblStatus.Text = "Charging shot... Release to play";
@@ -818,6 +902,88 @@ namespace SnookerGame
         #endregion
 
         #region UI Update Methods
+
+        /// <summary>
+        /// Shows an overlay message in the centre of the table.
+        /// </summary>
+        /// <param name="message">Message to display</param>
+        /// <param name="duration">How long to show in seconds</param>
+        /// <param name="backgroundColor">Background colour for the message box</param>
+        private void ShowOverlayMessage(string message, double duration, Color backgroundColor)
+        {
+            overlayMessage = message;
+            overlayMessageTime = DateTime.Now;
+            overlayDuration = duration;
+            overlayBackgroundColor = backgroundColor;
+        }
+
+        /// <summary>
+        /// Shows an overlay message with default black background.
+        /// </summary>
+        private void ShowOverlayMessage(string message, double duration)
+        {
+            ShowOverlayMessage(message, duration, Color.FromArgb(200, 0, 0, 0));
+        }
+
+        /// <summary>
+        /// Draws the overlay message if one is active.
+        /// </summary>
+        private void DrawOverlayMessage()
+        {
+            // Check if message should still be displayed
+            if (string.IsNullOrEmpty(overlayMessage)) return;
+
+            double elapsed = (DateTime.Now - overlayMessageTime).TotalSeconds;
+            if (elapsed > overlayDuration)
+            {
+                overlayMessage = "";
+                return;
+            }
+
+            // Calculate fade out in last 0.5 seconds
+            double opacity = 1.0;
+            if (elapsed > overlayDuration - 0.5)
+            {
+                opacity = (overlayDuration - elapsed) / 0.5;
+            }
+
+            // Create background rectangle
+            double boxWidth = 350;
+            double boxHeight = 60;
+            double boxX = canvasOffsetX + (TABLE_WIDTH - boxWidth) / 2;
+            double boxY = canvasOffsetY + (TABLE_HEIGHT - boxHeight) / 2;
+
+            System.Windows.Shapes.Rectangle background = new System.Windows.Shapes.Rectangle();
+            background.Width = boxWidth;
+            background.Height = boxHeight;
+            background.RadiusX = 10;
+            background.RadiusY = 10;
+            background.Fill = new SolidColorBrush(Color.FromArgb(
+                (byte)(overlayBackgroundColor.A * opacity),
+                overlayBackgroundColor.R,
+                overlayBackgroundColor.G,
+                overlayBackgroundColor.B));
+            background.Stroke = new SolidColorBrush(Color.FromArgb((byte)(255 * opacity), 255, 255, 255));
+            background.StrokeThickness = 2;
+
+            Canvas.SetLeft(background, boxX);
+            Canvas.SetTop(background, boxY);
+            gameCanvas.Children.Add(background);
+
+            // Create text
+            TextBlock text = new TextBlock();
+            text.Text = overlayMessage;
+            text.FontSize = 20;
+            text.FontWeight = FontWeights.Bold;
+            text.Foreground = new SolidColorBrush(Color.FromArgb((byte)(255 * opacity), 255, 255, 255));
+            text.TextAlignment = TextAlignment.Center;
+            text.Width = boxWidth;
+            text.TextWrapping = TextWrapping.Wrap;
+
+            Canvas.SetLeft(text, boxX);
+            Canvas.SetTop(text, boxY + (boxHeight - 28) / 2);
+            gameCanvas.Children.Add(text);
+        }
 
         /// <summary>
         /// Updates the score display for both players.
