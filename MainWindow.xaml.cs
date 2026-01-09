@@ -279,7 +279,25 @@ namespace SnookerGame
         private void InitialisePhysics()
         {
             physicsEngine = new PhysicsEngine();
+
+            // Subscribe to cue ball collision event
+            physicsEngine.OnCueBallCollision += OnCueBallHitBall;
+
             Debug.WriteLine("Physics engine initialised");
+        }
+
+        /// <summary>
+        /// Called when the cue ball collides with another ball.
+        /// Records the first ball hit for foul detection.
+        /// </summary>
+        private void OnCueBallHitBall(Ball ballHit)
+        {
+            if (!firstCollisionRecorded)
+            {
+                gameManager.RecordFirstBallHit(ballHit);
+                firstCollisionRecorded = true;
+                Debug.WriteLine($"First ball hit recorded: {ballHit}");
+            }
         }
 
         /// <summary>
@@ -400,21 +418,15 @@ namespace SnookerGame
         /// <param name="deltaTime">Time since last frame</param>
         private void UpdatePhysics(double deltaTime)
         {
-            // Create combined list for physics
+            // Update ball positions and handle collisions
+            // The physics engine will fire OnCueBallCollision event when cue ball hits another ball
+            bool stillMoving = physicsEngine.Update(cueBall, colouredBalls, table, deltaTime);
+
+            // Check for potted balls
             List<Ball> allBalls = new List<Ball>();
             allBalls.Add(cueBall);
             allBalls.AddRange(colouredBalls);
 
-            // Check for ball-ball collisions and record first hit
-            if (!firstCollisionRecorded)
-            {
-                CheckFirstBallHit(allBalls);
-            }
-
-            // Update ball positions and handle cushion collisions
-            bool stillMoving = physicsEngine.Update(cueBall, colouredBalls, table, deltaTime);
-
-            // Check for potted balls
             List<Ball> newlyPotted = physicsEngine.CheckPottedBalls(allBalls, table);
 
             foreach (Ball ball in newlyPotted)
@@ -433,42 +445,21 @@ namespace SnookerGame
         }
 
         /// <summary>
-        /// Checks for the first ball hit by the cue ball.
-        /// </summary>
-        private void CheckFirstBallHit(List<Ball> allBalls)
-        {
-            foreach (ColouredBall ball in colouredBalls)
-            {
-                if (!ball.IsOnTable) continue;
-
-                if (physicsEngine.DetectCollision(cueBall, ball))
-                {
-                    gameManager.RecordFirstBallHit(ball);
-                    firstCollisionRecorded = true;
-                    break;
-                }
-            }
-        }
-
-        /// <summary>
         /// Handles a ball being potted.
+        /// Note: This is called immediately when ball is potted.
+        /// We don't show celebration messages here - wait until ProcessShot 
+        /// determines if it was legal.
         /// </summary>
         /// <param name="ball">The ball that was potted</param>
         private void HandlePottedBall(Ball ball)
         {
             if (ball is CueBall)
             {
-                Debug.WriteLine("Cue ball potted - FOUL!");
-                lblStatus.Text = "Foul! Cue ball potted.";
+                Debug.WriteLine("Cue ball potted!");
             }
             else if (ball is ColouredBall colouredBall)
             {
-                Debug.WriteLine($"{colouredBall.Type} ball potted - {colouredBall.PointValue} points!");
-                lblStatus.Text = $"{colouredBall.Type} potted! ({colouredBall.PointValue} points)";
-
-                // Show potted message with green background
-                ShowOverlayMessage($"{colouredBall.Type} Potted!\n+{colouredBall.PointValue} Points",
-                    1.5, Color.FromArgb(200, 0, 100, 0));
+                Debug.WriteLine($"{colouredBall.Type} ball potted");
             }
         }
 
@@ -481,6 +472,7 @@ namespace SnookerGame
 
             // Store current player before processing (to detect turn change)
             Player playerBeforeProcessing = gameManager.CurrentPlayer;
+            int scoreBeforeProcessing = playerBeforeProcessing.Score;
 
             // Let game manager process the shot result
             gameManager.ProcessShot();
@@ -488,17 +480,32 @@ namespace SnookerGame
             // Update UI based on game state
             UpdateUI();
 
-            // Show foul message if applicable
+            // Show appropriate overlay message
             if (gameManager.FoulCommitted)
             {
+                // Foul - show foul message (red background)
                 ShowOverlayMessage($"FOUL!\n{gameManager.FoulReason}",
                     2.5, Color.FromArgb(200, 180, 0, 0));
             }
-            // Check if turn changed (player switched)
-            else if (gameManager.CurrentPlayer != playerBeforeProcessing)
+            else
             {
-                ShowOverlayMessage($"{gameManager.CurrentPlayer.Name}'s Turn",
-                    2.0, Color.FromArgb(200, 0, 0, 100));
+                // Check if points were scored (legal pot)
+                int pointsScored = gameManager.CurrentPlayer == playerBeforeProcessing
+                    ? playerBeforeProcessing.Score - scoreBeforeProcessing
+                    : 0;
+
+                if (pointsScored > 0)
+                {
+                    // Legal pot - show success message (green background)
+                    ShowOverlayMessage($"Great Shot!\n+{pointsScored} Points",
+                        1.5, Color.FromArgb(200, 0, 100, 0));
+                }
+                // Check if turn changed (player switched due to miss)
+                else if (gameManager.CurrentPlayer != playerBeforeProcessing)
+                {
+                    ShowOverlayMessage($"{gameManager.CurrentPlayer.Name}'s Turn",
+                        2.0, Color.FromArgb(200, 0, 0, 100));
+                }
             }
 
             // Handle game state
@@ -796,8 +803,111 @@ namespace SnookerGame
             Point pos = e.GetPosition(gameCanvas);
             mousePosition.Set(pos.X, pos.Y);
 
+            // If placing cue ball, move it with the mouse (constrained to D)
+            if (cueBall != null && cueBall.IsInHand && !ballsMoving)
+            {
+                UpdateCueBallPlacement();
+            }
+
             // Always track for aiming (when ball isn't moving)
             isAiming = true;
+        }
+
+        /// <summary>
+        /// Updates the cue ball position while placing, constrained to the D.
+        /// </summary>
+        private void UpdateCueBallPlacement()
+        {
+            // Convert mouse position to table coordinates
+            double tableX = mousePosition.X - canvasOffsetX;
+            double tableY = mousePosition.Y - canvasOffsetY;
+
+            // Constrain to the D area
+            Vector2D constrainedPosition = ConstrainToD(tableX, tableY);
+
+            // Update cue ball position
+            cueBall.PlaceBall(constrainedPosition);
+        }
+
+        /// <summary>
+        /// Constrains a position to be within the D area.
+        /// </summary>
+        /// <param name="x">Desired X position</param>
+        /// <param name="y">Desired Y position</param>
+        /// <returns>Position constrained to within the D</returns>
+        private Vector2D ConstrainToD(double x, double y)
+        {
+            Vector2D dCentre = table.DCentre;
+            double dRadius = table.DRadius;
+            double baulkLineX = table.BaulkLineX;
+            double ballRadius = cueBall.Radius;
+
+            // First, constrain X to be at or behind the baulk line
+            if (x > baulkLineX - ballRadius)
+            {
+                x = baulkLineX - ballRadius;
+            }
+
+            // Keep ball on the table (not past left edge)
+            if (x < ballRadius)
+            {
+                x = ballRadius;
+            }
+
+            // Constrain Y to table bounds
+            if (y < ballRadius)
+            {
+                y = ballRadius;
+            }
+            if (y > table.Height - ballRadius)
+            {
+                y = table.Height - ballRadius;
+            }
+
+            // Now check if position is within the D semicircle
+            // The D is a semicircle on the left side of the baulk line
+            double distanceFromDCentre = Math.Sqrt(
+                (x - dCentre.X) * (x - dCentre.X) +
+                (y - dCentre.Y) * (y - dCentre.Y));
+
+            // If outside the D radius, project onto the D boundary
+            if (distanceFromDCentre > dRadius - ballRadius)
+            {
+                // Calculate angle from D centre to mouse position
+                double angle = Math.Atan2(y - dCentre.Y, x - dCentre.X);
+
+                // Only constrain if we're in the semicircle region (left of baulk line)
+                // The D semicircle opens to the left (negative X direction from baulk)
+                if (x <= baulkLineX)
+                {
+                    // If the angle would put us to the right of baulk line, 
+                    // clamp to the top or bottom of the D
+                    double projectedX = dCentre.X + (dRadius - ballRadius) * Math.Cos(angle);
+
+                    if (projectedX > baulkLineX - ballRadius)
+                    {
+                        // Clamp to the baulk line at the nearest D intersection
+                        x = baulkLineX - ballRadius;
+                        // Clamp Y to be within the D's vertical range
+                        if (y < dCentre.Y - dRadius + ballRadius)
+                        {
+                            y = dCentre.Y - dRadius + ballRadius;
+                        }
+                        else if (y > dCentre.Y + dRadius - ballRadius)
+                        {
+                            y = dCentre.Y + dRadius - ballRadius;
+                        }
+                    }
+                    else
+                    {
+                        // Project onto the D arc
+                        x = projectedX;
+                        y = dCentre.Y + (dRadius - ballRadius) * Math.Sin(angle);
+                    }
+                }
+            }
+
+            return new Vector2D(x, y);
         }
 
         /// <summary>
@@ -815,10 +925,13 @@ namespace SnookerGame
                 return;
             }
 
-            // If cue ball is in hand, place it
+            // If cue ball is in hand, confirm placement and start aiming
             if (cueBall.IsInHand)
             {
-                PlaceCueBall(e.GetPosition(gameCanvas));
+                // Ball is already positioned by mouse movement, just confirm it
+                cueBall.ConfirmPlacement();
+                lblStatus.Text = "Ball placed. Click and hold to charge shot.";
+                Debug.WriteLine($"Cue ball placed at: {cueBall.Position}");
             }
             // Otherwise, start charging a shot
             else if (!cueBall.IsMoving)
@@ -873,29 +986,18 @@ namespace SnookerGame
         }
 
         /// <summary>
-        /// Attempts to place the cue ball at the clicked position.
-        /// Only valid if position is within the D.
+        /// Legacy method - placement now handled by mouse movement.
+        /// Kept for potential future use.
         /// </summary>
         /// <param name="clickPosition">Where the player clicked</param>
         private void PlaceCueBall(Point clickPosition)
         {
-            // Convert to table coordinates
-            double tableX = clickPosition.X - canvasOffsetX;
-            double tableY = clickPosition.Y - canvasOffsetY;
-            Vector2D position = new Vector2D(tableX, tableY);
-
-            // Check if position is in the D
-            if (table.IsInD(position))
+            // Placement is now handled by UpdateCueBallPlacement() during mouse move
+            // This method confirms the placement
+            if (cueBall.IsInHand)
             {
-                cueBall.PlaceBall(position);
                 cueBall.ConfirmPlacement();
                 lblStatus.Text = "Ball placed. Click and hold to charge shot.";
-                Debug.WriteLine($"Cue ball placed at: {position}");
-            }
-            else
-            {
-                lblStatus.Text = "Invalid position! Ball must be placed in the D.";
-                Debug.WriteLine("Attempted to place ball outside D");
             }
         }
 
@@ -947,12 +1049,14 @@ namespace SnookerGame
                 opacity = (overlayDuration - elapsed) / 0.5;
             }
 
-            // Create background rectangle
-            double boxWidth = 350;
-            double boxHeight = 60;
+            // Calculate box size based on message content
+            int lineCount = overlayMessage.Split('\n').Length;
+            double boxWidth = 400;
+            double boxHeight = 50 + (lineCount * 25);
             double boxX = canvasOffsetX + (TABLE_WIDTH - boxWidth) / 2;
             double boxY = canvasOffsetY + (TABLE_HEIGHT - boxHeight) / 2;
 
+            // Create background rectangle
             System.Windows.Shapes.Rectangle background = new System.Windows.Shapes.Rectangle();
             background.Width = boxWidth;
             background.Height = boxHeight;
@@ -973,15 +1077,17 @@ namespace SnookerGame
             // Create text
             TextBlock text = new TextBlock();
             text.Text = overlayMessage;
-            text.FontSize = 20;
+            text.FontSize = 18;
             text.FontWeight = FontWeights.Bold;
             text.Foreground = new SolidColorBrush(Color.FromArgb((byte)(255 * opacity), 255, 255, 255));
             text.TextAlignment = TextAlignment.Center;
-            text.Width = boxWidth;
+            text.HorizontalAlignment = HorizontalAlignment.Center;
+            text.VerticalAlignment = VerticalAlignment.Center;
+            text.Width = boxWidth - 20;
             text.TextWrapping = TextWrapping.Wrap;
 
-            Canvas.SetLeft(text, boxX);
-            Canvas.SetTop(text, boxY + (boxHeight - 28) / 2);
+            Canvas.SetLeft(text, boxX + 10);
+            Canvas.SetTop(text, boxY + 10);
             gameCanvas.Children.Add(text);
         }
 

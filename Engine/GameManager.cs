@@ -414,12 +414,14 @@ namespace SnookerGame.Engine
             foulPoints = MINIMUM_FOUL_POINTS;
             foulReason = "";
 
-            // Foul 1: Potting the cue ball
+            // Foul 1: Potting the cue ball (check this first as it's most obvious)
             if (cueBallPotted)
             {
                 foulCommitted = true;
                 foulReason = "Cue ball potted";
+                foulPoints = Math.Max(foulPoints, GetTargetBallValue());
                 Debug.WriteLine("Foul: Cue ball potted");
+                return;  // No need to check other fouls
             }
 
             // Foul 2: Failing to hit any ball
@@ -429,15 +431,20 @@ namespace SnookerGame.Engine
                 foulReason = "Failed to hit any ball";
                 foulPoints = Math.Max(foulPoints, GetTargetBallValue());
                 Debug.WriteLine("Foul: No ball hit");
+                return;
             }
+
             // Foul 3: Hitting wrong ball first
-            else if (!IsCorrectBallHit(firstBallHit))
+            if (!IsCorrectBallHit(firstBallHit))
             {
                 foulCommitted = true;
-                foulReason = $"Hit wrong ball first (hit {GetBallDescription(firstBallHit)}, needed {targetBallType})";
+                string hitBallName = GetBallDescription(firstBallHit);
+                string targetName = targetBallType == TargetBallType.Colour ? "a colour" : targetBallType.ToString().ToLower();
+                foulReason = $"Hit {hitBallName} first\n(should hit {targetName})";
                 foulPoints = Math.Max(foulPoints, GetBallValue(firstBallHit));
                 foulPoints = Math.Max(foulPoints, GetTargetBallValue());
                 Debug.WriteLine($"Foul: Wrong ball hit first");
+                return;
             }
 
             // Foul 4: Potting wrong ball(s)
@@ -446,9 +453,11 @@ namespace SnookerGame.Engine
                 if (!IsLegalPot(ball))
                 {
                     foulCommitted = true;
-                    foulReason = $"Illegally potted {GetBallDescription(ball)}";
+                    string pottedBallName = GetBallDescription(ball);
+                    foulReason = $"Illegally potted {pottedBallName}";
                     foulPoints = Math.Max(foulPoints, GetBallValue(ball));
-                    Debug.WriteLine($"Foul: Illegally potted {GetBallDescription(ball)}");
+                    Debug.WriteLine($"Foul: Illegally potted {pottedBallName}");
+                    return;
                 }
             }
         }

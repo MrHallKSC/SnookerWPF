@@ -1,7 +1,6 @@
 ﻿using System;
-using System.Net.Sockets;
-using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Controls;
 using System.Windows.Shapes;
 
 namespace SnookerGame.Models
@@ -33,7 +32,7 @@ namespace SnookerGame.Models
         /// This prevents balls from moving infinitely slowly due to floating-point
         /// precision issues with friction calculations.
         /// </summary>
-        protected const double VELOCITY_THRESHOLD = 0.1;
+        protected const double VELOCITY_THRESHOLD = 2.0;
 
         /// <summary>
         /// Standard mass for all snooker balls (equal mass simplifies collision physics).

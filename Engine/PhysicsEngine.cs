@@ -51,7 +51,7 @@ namespace SnookerGame.Engine
         /// Minimum velocity threshold. Balls moving slower than this are stopped.
         /// Prevents balls from creeping infinitely slowly due to floating-point precision.
         /// </summary>
-        private const double MIN_VELOCITY = 0.5;
+        private const double MIN_VELOCITY = 2.0;
 
         /// <summary>
         /// Maximum iterations for collision resolution per frame.
@@ -161,6 +161,17 @@ namespace SnookerGame.Engine
         /// <returns>True if any balls are still moving</returns>
         public bool Update(List<Ball> balls, Table table, double deltaTime)
         {
+            // Find the cue ball in the list (needed for collision event)
+            CueBall cueBall = null;
+            foreach (Ball ball in balls)
+            {
+                if (ball is CueBall cb)
+                {
+                    cueBall = cb;
+                    break;
+                }
+            }
+
             bool anyBallMoving = false;
 
             // Update each ball
@@ -184,7 +195,7 @@ namespace SnookerGame.Engine
             }
 
             // Step 4: Check ball-ball collisions
-            CheckBallCollisions(balls);
+            CheckBallCollisions(balls, cueBall);
 
             // Check if any balls are now moving (collision might have started a stationary ball)
             foreach (Ball ball in balls)
@@ -211,7 +222,42 @@ namespace SnookerGame.Engine
             allBalls.Add(cueBall);
             allBalls.AddRange(colouredBalls);
 
-            return Update(allBalls, table, deltaTime);
+            bool anyBallMoving = false;
+
+            // Update each ball
+            foreach (Ball ball in allBalls)
+            {
+                if (!ball.IsOnTable) continue;
+
+                if (ball.IsMoving)
+                {
+                    anyBallMoving = true;
+
+                    // Step 1: Update position based on velocity
+                    UpdatePosition(ball, deltaTime);
+
+                    // Step 2: Apply friction
+                    ApplyFriction(ball, deltaTime);
+
+                    // Step 3: Check cushion collisions
+                    CheckCushionCollisions(ball, table);
+                }
+            }
+
+            // Step 4: Check ball-ball collisions (pass cueBall for event firing)
+            CheckBallCollisions(allBalls, cueBall);
+
+            // Check if any balls are now moving (collision might have started a stationary ball)
+            foreach (Ball ball in allBalls)
+            {
+                if (ball.IsOnTable && ball.IsMoving)
+                {
+                    anyBallMoving = true;
+                    break;
+                }
+            }
+
+            return anyBallMoving;
         }
 
         #endregion
@@ -383,6 +429,12 @@ namespace SnookerGame.Engine
         #region Ball-Ball Collision Detection and Resolution
 
         /// <summary>
+        /// Event that fires when the cue ball hits another ball.
+        /// Used by GameManager to track first ball hit for foul detection.
+        /// </summary>
+        public event Action<Ball> OnCueBallCollision;
+
+        /// <summary>
         /// Detects if two balls are colliding (overlapping).
         /// 
         /// Two circles collide when the distance between their centres
@@ -523,7 +575,8 @@ namespace SnookerGame.Engine
         /// causes another.
         /// </summary>
         /// <param name="balls">List of all balls</param>
-        private void CheckBallCollisions(List<Ball> balls)
+        /// <param name="cueBall">Reference to the cue ball for collision event</param>
+        private void CheckBallCollisions(List<Ball> balls, CueBall cueBall)
         {
             // Multiple iterations to handle chain reactions
             for (int iteration = 0; iteration < MAX_COLLISION_ITERATIONS; iteration++)
@@ -544,6 +597,16 @@ namespace SnookerGame.Engine
                         // Check for collision
                         if (DetectCollision(ball1, ball2))
                         {
+                            // Fire event if cue ball is involved
+                            if (ball1 == cueBall && OnCueBallCollision != null)
+                            {
+                                OnCueBallCollision(ball2);
+                            }
+                            else if (ball2 == cueBall && OnCueBallCollision != null)
+                            {
+                                OnCueBallCollision(ball1);
+                            }
+
                             // Resolve the collision
                             ResolveCollision(ball1, ball2);
                             collisionFound = true;
