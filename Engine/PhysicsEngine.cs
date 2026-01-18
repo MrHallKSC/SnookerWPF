@@ -286,13 +286,36 @@ namespace SnookerGame.Engine
         /// <summary>
         /// Applies friction to reduce a ball's velocity over time.
         /// 
-        /// Friction model: velocity_new = velocity_old × frictionCoefficient
+        /// === PHYSICS EXPLANATION FOR A-LEVEL STUDENTS ===
         /// 
-        /// This creates exponential decay, which is physically reasonable
-        /// for rolling resistance on a cloth surface.
+        /// TWO FRICTION MODELS EXPLAINED:
         /// 
-        /// If velocity drops below threshold, the ball is stopped completely
-        /// to prevent infinite slow movement.
+        /// 1. EXPONENTIAL DECAY (USED HERE):
+        /// velocity_new = velocity_old × friction^(deltaTime × 60)
+        /// 
+        /// This models rolling resistance and air resistance, which affect the ball
+        /// proportional to current velocity. A real ball on cloth experiences decreasing
+        /// resistance as it slows down. Mathematically:
+        /// 
+        /// dv/dt = -k × v  (differential equation)
+        /// Solution: v(t) = v₀ × e^(-kt) ≈ v₀ × friction^t
+        /// 
+        /// Advantages:
+        /// - Physically realistic: balls naturally decelerate quickly then slowly
+        /// - No terminal velocity problems
+        /// - Frame-rate independent when using Math.Pow
+        /// 
+        /// The "× 60" factor normalizes for 60 FPS. This prevents friction effects
+        /// from changing when frame rate varies (important for smooth gameplay).
+        /// 
+        /// 2. LINEAR DECELERATION (ALTERNATIVE - see ApplyLinearFriction):
+        /// velocity_new = velocity_old - (deceleration × deltaTime)
+        /// 
+        /// This is simpler but less realistic. It assumes constant friction force
+        /// regardless of speed, and balls would come to exact rest in finite time.
+        /// 
+        /// Real snooker friction coefficients: approximately 0.98-0.99 per frame
+        /// This means about 98-99% of velocity retained each frame.
         /// </summary>
         /// <param name="ball">Ball to apply friction to</param>
         /// <param name="deltaTime">Time step in seconds</param>
@@ -300,17 +323,20 @@ namespace SnookerGame.Engine
         {
             if (!ball.IsMoving) return;
 
-            // Apply friction as a multiplier
-            // Using: v_new = v_old × friction^(deltaTime × 60)
-            // The power adjusts for frame rate variations
+            // Calculate friction multiplier using exponential decay
+            // Math.Pow(base, exponent) calculates: base ^ exponent
+            // frictionCoefficient (0.985) raised to power (deltaTime × 60)
+            // At 60 FPS: deltaTime ≈ 0.0167, so exponent ≈ 1.0, giving ≈ 0.985× velocity
             double frictionMultiplier = Math.Pow(frictionCoefficient, deltaTime * 60);
 
             Vector2D newVelocity = ball.Velocity.Multiply(frictionMultiplier);
 
-            // Check if velocity is below threshold
+            // Velocity threshold check: prevents balls from moving infinitesimally slowly
+            // After many frames, floating-point errors could cause tiny velocities.
+            // Below 2.0 units/sec, we consider the ball stopped (good enough for gameplay).
             if (newVelocity.Magnitude < MIN_VELOCITY)
             {
-                // Stop the ball completely
+                // Complete stop - prevents jitter from floating-point math
                 ball.SetVelocity(new Vector2D(0, 0));
             }
             else
@@ -463,19 +489,36 @@ namespace SnookerGame.Engine
         /// <summary>
         /// Resolves a collision between two balls using elastic collision physics.
         /// 
-        /// This implements conservation of momentum and kinetic energy.
-        /// For balls of equal mass, the formula simplifies to:
+        /// === PHYSICS EXPLANATION FOR A-LEVEL STUDENTS ===
         /// 
-        /// v1' = v1 - [(v1-v2)·(x1-x2) / |x1-x2|²] × (x1-x2)
-        /// v2' = v2 - [(v2-v1)·(x2-x1) / |x2-x1|²] × (x2-x1)
+        /// This implements conservation of momentum and kinetic energy, which are fundamental
+        /// principles in Newtonian mechanics:
         /// 
-        /// Where:
-        /// - v1, v2 are the velocity vectors
-        /// - x1, x2 are the position vectors
-        /// - · is the dot product
-        /// - |...| is the magnitude
+        /// 1. CONSERVATION OF MOMENTUM: m₁v₁ + m₂v₂ = m₁v₁' + m₂v₂'
+        ///    The total momentum before collision equals total momentum after.
+        ///    Since all snooker balls have equal mass (m), this simplifies significantly.
         /// 
-        /// The coefficient of restitution is applied to account for energy loss.
+        /// 2. COEFFICIENT OF RESTITUTION (e): Determines energy loss
+        ///    e = 0 means perfectly inelastic (maximum energy loss, balls stick)
+        ///    e = 1 means perfectly elastic (no energy loss)
+        ///    Real snooker balls: e ≈ 0.96 (very little energy loss)
+        /// 
+        /// 3. THE COLLISION NORMAL: The direction from ball1 to ball2
+        ///    We only exchange momentum ALONG this direction.
+        ///    Velocities perpendicular to collision normal are unchanged.
+        /// 
+        /// 4. IMPULSE-BASED RESOLUTION: Instead of calculating new velocities directly,
+        ///    we calculate an "impulse" (instantaneous force) and apply it to both balls.
+        ///    This ensures momentum conservation and correct energy loss via restitution.
+        /// 
+        /// Formula for equal-mass elastic collision:
+        /// j = -(1 + e) × (v₁·n̂ - v₂·n̂) / 2
+        /// where:
+        /// - j is the impulse magnitude
+        /// - n̂ is the normalised collision vector
+        /// - · represents dot product (component in direction of collision)
+        /// 
+        /// Then apply: v₁' = v₁ + j×n̂  and  v₂' = v₂ - j×n̂
         /// </summary>
         /// <param name="ball1">First ball</param>
         /// <param name="ball2">Second ball</param>
@@ -487,51 +530,69 @@ namespace SnookerGame.Engine
             Vector2D vel1 = ball1.Velocity;
             Vector2D vel2 = ball2.Velocity;
 
-            // Calculate the vector between centres (collision normal)
+            // Step 1: Calculate the vector pointing from ball2 to ball1
+            // This becomes our collision normal (direction of force exchange)
             Vector2D delta = pos1.Subtract(pos2);
             double distance = delta.Magnitude;
 
             // Avoid division by zero if balls are at exact same position
+            // (shouldn't happen, but defensive programming prevents crashes)
             if (distance == 0)
             {
-                // Nudge balls apart slightly
                 delta = new Vector2D(1, 0);
                 distance = 1;
             }
 
-            // Normalise the collision vector to get the collision normal
+            // Step 2: Normalise the collision vector to create a unit vector
+            // This unit vector tells us the direction to separate the balls
+            // and also the direction in which momentum exchanges occur
             Vector2D collisionNormal = delta.Normalised;
 
-            // Calculate relative velocity
+            // Step 3: Calculate relative velocity (how fast ball1 approaches ball2)
             Vector2D relativeVelocity = vel1.Subtract(vel2);
 
-            // Calculate relative velocity along the collision normal
-            // This is the component of velocity in the direction of the collision
+            // Step 4: Find the component of relative velocity along the collision normal
+            // Using dot product: a·b̂ = |a| × cos(θ)
+            // This gives us how fast the balls are approaching each other
+            // Positive value = approaching, negative = separating
             double velocityAlongNormal = relativeVelocity.DotProduct(collisionNormal);
 
-            // Don't resolve if balls are moving apart
-            // (This prevents balls from sticking together)
+            // Step 5: Early exit if balls are already separating
+            // If velocityAlongNormal > 0, the balls are moving apart.
+            // No collision response needed - prevents unnecessary calculations
+            // and prevents balls from sticking together after separation
             if (velocityAlongNormal > 0)
             {
                 return;
             }
 
-            // Calculate impulse scalar using coefficient of restitution
-            // For equal mass balls: j = -(1 + e) * velocityAlongNormal / 2
+            // Step 6: Calculate the impulse magnitude using coefficient of restitution
+            // Formula: j = -(1 + e) × velocityAlongNormal / 2
+            // 
+            // Why this formula?
+            // - (1 + e) incorporates both momentum conservation (the 1) 
+            //   and energy loss via restitution (the e)
+            // - Dividing by 2 accounts for equal mass distribution
+            // - The negative sign corrects the direction
             double impulseScalar = -(1 + coefficientOfRestitution) * velocityAlongNormal / 2;
 
-            // Calculate impulse vector
+            // Step 7: Convert impulse scalar into a vector by multiplying by collision normal
+            // This vector shows both magnitude and direction of the force exchange
             Vector2D impulse = collisionNormal.Multiply(impulseScalar);
 
-            // Apply impulse to both balls (equal and opposite)
+            // Step 8: Apply equal and opposite impulses to both balls
+            // Ball1 gains impulse, Ball2 loses it (Newton's Third Law)
+            // This ensures total momentum is conserved
             Vector2D newVel1 = vel1.Add(impulse);
             Vector2D newVel2 = vel2.Subtract(impulse);
 
-            // Set new velocities
+            // Update ball velocities
             ball1.SetVelocity(newVel1);
             ball2.SetVelocity(newVel2);
 
-            // Separate balls to prevent overlap (positional correction)
+            // Step 9: Positional correction - separate overlapping balls
+            // Due to discrete time stepping, balls may overlap slightly.
+            // This prevents them from sinking into each other.
             SeparateBalls(ball1, ball2, distance);
         }
 

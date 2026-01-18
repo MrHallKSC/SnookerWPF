@@ -12,7 +12,7 @@ This exemplar WPF application demonstrates a two-player snooker game with realis
 
 ## ⚠️ Important Notice for Students
 
-**This project must NOT be submitted as your own work for AQA 7517 NEA coursework.**
+**This project must NOT be submitted as your own work OR copied from for your AQA 7517 NEA coursework.**
 
 This exemplar is designed to help you:
 - Understand how complex game projects are structured

@@ -9,12 +9,54 @@ namespace SnookerGame.Models
     /// <summary>
     /// Represents the white cue ball that players strike.
     /// 
-    /// This class inherits from Ball and adds specific behaviours unique to the cue ball:
-    /// - Can be positioned freely when "in hand" (after fouls or at game start)
-    /// - Has aiming functionality (angle and power)
-    /// - Can be struck by the player
+    /// === INHERITANCE FOR A-LEVEL STUDENTS ===
     /// 
-    /// This demonstrates inheritance - CueBall IS-A Ball, with additional capabilities.
+    /// This class demonstrates INHERITANCE - a fundamental OOP principle.
+    /// 
+    /// INHERITANCE DEFINITION:
+    /// CueBall : Ball means "CueBall inherits from Ball" or "CueBall extends Ball"
+    /// 
+    /// WHAT DOES CUEBALL INHERIT?
+    /// CueBall automatically gets these from Ball class:
+    /// - All properties: Position, Velocity, Radius, Mass, Colour, IsOnTable, IsMoving
+    /// - All methods: Move(), SetVelocity(), GetRadius(), etc.
+    /// - All protected fields: Can access what Ball allows
+    /// 
+    /// WHAT IS DIFFERENT ABOUT CUEBALL?
+    /// CueBall adds these NEW capabilities unique to the white ball:
+    /// - isInHand: Can be freely positioned by player
+    /// - aimAngle: Direction player wants to shoot
+    /// - shotPower: Power accumulated for the shot
+    /// - Strike() method: Converts aim angle + power into velocity
+    /// - SetAimDirection() method: Updates aim based on mouse position
+    /// - PlaceBall() method: Positions ball when in hand
+    /// 
+    /// WHY IS THIS USEFUL?
+    /// 
+    /// 1. CODE REUSE:
+    ///    CueBall doesn't rewrite position/velocity code - it inherits it.
+    ///    This prevents duplication and bugs.
+    /// 
+    /// 2. SPECIALIZATION:
+    ///    CueBall can do everything Ball does, PLUS more.
+    ///    It's a SPECIALIZED type of Ball.
+    /// 
+    /// 3. IS-A RELATIONSHIP:
+    ///    CueBall IS-A Ball - it can be used anywhere Ball is expected
+    ///    Example: List&lt;Ball&gt; balls = new List&lt;Ball&gt;();
+    ///             balls.Add(cueBall);  // Works! CueBall is-a Ball
+    /// 
+    /// 4. POLYMORPHISM:
+    ///    Different ball types can behave differently:
+    ///    cueBall.Strike();          // CueBall-specific method
+    ///    redBall.IsMoving;          // Inherited property from Ball
+    ///    - Same property/method name can do different things per type
+    /// 
+    /// DESIGN QUESTION: WHY NOT JUST ADD FIELDS TO BALL?
+    /// If we put aiming and striking in the base Ball class,
+    /// ColouredBalls would have unused aiming code they'll never use.
+    /// This violates the Single Responsibility Principle.
+    /// Better design: Put shared code in Ball, specialized code in each subclass.
     /// </summary>
     public class CueBall : Ball
     {
@@ -132,16 +174,61 @@ namespace SnookerGame.Models
         /// Updates the aim direction based on target coordinates.
         /// Typically called with mouse position to aim toward cursor.
         /// 
-        /// Uses trigonometry: angle = atan2(targetY - ballY, targetX - ballX)
-        /// atan2 handles all quadrants correctly, returning angle in range -π to π.
+        /// === INVERSE TRIGONOMETRY FOR A-LEVEL STUDENTS ===
+        /// 
+        /// THE PROBLEM:
+        /// Player has: a target point (mouse position)
+        /// We need: the angle from the ball to that point
+        /// 
+        /// SOLUTION: Use inverse tangent function (arctan/atan)
+        /// 
+        /// BASIC ARCTAN LIMITATION:
+        /// The basic arctan function only covers two quadrants (-π/2 to π/2).
+        /// If you only know dx and calculated angle = arctan(dy/dx),
+        /// you can't distinguish between opposite directions.
+        /// 
+        /// Example:
+        /// arctan(1) = π/4 (northeast)
+        /// arctan(-1) = -π/4 (could be southeast OR southwest!)
+        /// 
+        /// SOLUTION: Use atan2(y, x) - the two-argument arctangent
+        /// 
+        /// ATAN2 MAGIC:
+        /// atan2(dy, dx) examines BOTH components to return the correct angle.
+        /// It uses the SIGNS of dy and dx to determine the quadrant:
+        /// 
+        /// atan2(+, +) → Q1: 0 to π/2       (northeast)
+        /// atan2(+, -) → Q2: π/2 to π       (northwest)
+        /// atan2(-, -) → Q3: -π to -π/2     (southwest)
+        /// atan2(-, +) → Q4: -π/2 to 0      (southeast)
+        /// 
+        /// Return range: -π to π (covers all 360° directions)
+        /// 
+        /// EXAMPLE:
+        /// Ball at (100, 100), target at (150, 150)
+        /// dx = 150 - 100 = 50
+        /// dy = 150 - 100 = 50
+        /// atan2(50, 50) ≈ 0.785 rad ≈ 45° (northeast) ✓
+        /// 
+        /// Ball at (100, 100), target at (50, 150)
+        /// dx = 50 - 100 = -50
+        /// dy = 150 - 100 = 50
+        /// atan2(50, -50) ≈ 2.356 rad ≈ 135° (northwest) ✓
+        /// 
+        /// This is a FUNDAMENTAL technique for converting 2D positions into angles,
+        /// used in game development, robotics, and physics simulations worldwide.
         /// </summary>
         /// <param name="targetX">X coordinate to aim towards</param>
         /// <param name="targetY">Y coordinate to aim towards</param>
         public void SetAimDirection(double targetX, double targetY)
         {
-            // Calculate angle from ball to target
+            // Calculate displacement vector from ball to target
             double dx = targetX - Position.X;
             double dy = targetY - Position.Y;
+
+            // Use atan2 to get angle from ball to target
+            // This is the inverse trigonometric operation: given X and Y components,
+            // find the angle they represent. atan2 handles all four quadrants correctly.
             aimAngle = Math.Atan2(dy, dx);
         }
 
@@ -191,8 +278,41 @@ namespace SnookerGame.Models
         /// Executes a shot with the current aim angle and power.
         /// Converts the polar coordinates (angle + power) into a velocity vector.
         /// 
-        /// Physics: velocity = (power × cos(angle), power × sin(angle))
-        /// This uses trigonometry to convert angle and magnitude to X,Y components.
+        /// === TRIGONOMETRY FOR A-LEVEL STUDENTS ===
+        /// 
+        /// COORDINATE SYSTEMS:
+        /// - POLAR: Uses angle (θ) and magnitude (r) to describe a vector
+        ///   Example: "shoot at 45° with power 500"
+        /// - CARTESIAN: Uses x and y coordinates
+        ///   Example: "velocity = (353.6, 353.6)"
+        /// 
+        /// CONVERSION FROM POLAR TO CARTESIAN:
+        /// The Pythagorean identity and basic trigonometry give us:
+        /// 
+        /// x = r × cos(θ)
+        /// y = r × sin(θ)
+        /// 
+        /// Where:
+        /// - r is the magnitude (shot power)
+        /// - θ is the angle in radians (aimAngle)
+        /// - cos and sin convert angular direction to linear components
+        /// 
+        /// EXAMPLE at 45°:
+        /// r = 500, θ = π/4 (45° in radians)
+        /// x = 500 × cos(π/4) = 500 × 0.707 ≈ 353.6
+        /// y = 500 × sin(π/4) = 500 × 0.707 ≈ 353.6
+        /// 
+        /// WHY RADIANS?
+        /// Trigonometric functions in C# (Math.Cos, Math.Sin) use RADIANS, not degrees.
+        /// 1 radian ≈ 57.3°, or π radians = 180°
+        /// Conversion: radians = degrees × π/180
+        /// 
+        /// ANGLE CONVENTION IN THIS CODE:
+        /// - 0 radians = rightward (positive X)
+        /// - π/2 radians = downward (positive Y)
+        /// - π radians = leftward (negative X)
+        /// - -π/2 radians = upward (negative Y)
+        /// This follows the standard mathematical convention.
         /// </summary>
         public void Strike()
         {
@@ -208,18 +328,21 @@ namespace SnookerGame.Models
                 return;
             }
 
-            // Calculate actual power value from percentage
+            // Map normalized power (0-1) to actual power range (MIN_POWER to MAX_POWER)
+            // This allows flexible adjustment of game difficulty without changing formulas
             double actualPower = MIN_POWER + (shotPower * (MAX_POWER - MIN_POWER));
 
-            // Convert polar (angle, magnitude) to Cartesian (x, y) velocity
-            // Using: x = magnitude × cos(angle), y = magnitude × sin(angle)
+            // Convert from POLAR coordinates (angle, magnitude) to CARTESIAN (x, y)
+            // This is the fundamental trigonometric conversion needed for physics
+            // x = magnitude × cos(angle)
+            // y = magnitude × sin(angle)
             double velocityX = actualPower * Math.Cos(aimAngle);
             double velocityY = actualPower * Math.Sin(aimAngle);
 
-            // Set the velocity
+            // Apply the calculated velocity vector to the ball
             Velocity = new Vector2D(velocityX, velocityY);
 
-            // Reset power after shot
+            // Reset power after shot (prevents multiple strikes)
             shotPower = 0;
         }
 

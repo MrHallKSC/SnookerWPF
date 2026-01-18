@@ -8,12 +8,54 @@ namespace SnookerGame.Models
     /// <summary>
     /// Abstract base class for all balls on the snooker table.
     /// 
-    /// This class demonstrates the OOP concept of abstraction - we define the common
-    /// properties and behaviours that ALL balls share, while leaving specific
-    /// implementations to the derived classes (CueBall and ColouredBall).
+    /// === OOP DESIGN PATTERN FOR A-LEVEL STUDENTS ===
     /// 
-    /// We make this abstract because we never want to create a generic "Ball" object;
-    /// every ball must be either a cue ball or a coloured ball with specific properties.
+    /// This class demonstrates INHERITANCE and ABSTRACTION - two key OOP principles.
+    /// 
+    /// WHY MAKE THIS CLASS ABSTRACT?
+    /// 
+    /// 1. ABSTRACTION (Identifying Common Concepts):
+    ///    Both CueBall and ColouredBall are "balls" with:
+    ///    - Position and velocity (location and movement)
+    ///    - Radius and mass (physical properties)
+    ///    - Colour (visual appearance)
+    ///    - Method to move (physics)
+    ///    - Method to render (drawing)
+    ///    
+    ///    These commonalities belong in the base Ball class.
+    /// 
+    /// 2. PREVENTING INVALID INSTANTIATION:
+    ///    Making Ball abstract means you CANNOT do:
+    ///    Ball b = new Ball(position, color);  // ERROR: can't instantiate abstract class
+    ///    
+    ///    This is intentional! A "generic ball" doesn't exist in snooker.
+    ///    You must use CueBall or ColouredBall.
+    /// 
+    /// 3. ENFORCING CONTRACT:
+    ///    Subclasses MUST implement all abstract methods.
+    ///    This guarantees both CueBall and ColouredBall have everything
+    ///    that the physics engine expects.
+    /// 
+    /// INHERITANCE HIERARCHY:
+    ///     Ball (abstract base)
+    ///      ├─ CueBall (can be positioned, has aiming)
+    ///      └─ ColouredBall (has point value, respotting rules)
+    /// 
+    /// BENEFITS OF THIS DESIGN:
+    /// - Code reuse: physics calculations work for ALL balls without duplication
+    /// - Type safety: List&lt;Ball&gt; can hold any ball type safely
+    /// - Extensibility: adding new ball types just needs extending Ball
+    /// - Clarity: the code structure mirrors the real-world concept
+    /// 
+    /// EXAMPLE POLYMORPHISM:
+    /// List&lt;Ball&gt; allBalls = new List&lt;Ball&gt;();
+    /// allBalls.Add(cueBall);           // CueBall IS-A Ball
+    /// allBalls.Add(redBall);           // ColouredBall IS-A Ball
+    /// 
+    /// foreach (Ball ball in allBalls)
+    /// {
+    ///     ball.Move();  // Works for any Ball subclass!
+    /// }
     /// </summary>
     public abstract class Ball
     {

@@ -8,6 +8,38 @@ namespace SnookerGame.Engine
     /// <summary>
     /// Enumerates the possible states of the game.
     /// Used to control game flow and UI interactions.
+    /// 
+    /// === STATE MACHINE FOR A-LEVEL STUDENTS ===
+    /// 
+    /// A STATE MACHINE is a design pattern for managing complex behavior.
+    /// Instead of scattered if-else statements, we define:
+    /// 1. Discrete STATES the system can be in
+    /// 2. Valid TRANSITIONS between states
+    /// 3. Actions to take in each state
+    /// 
+    /// SNOOKER GAME STATES:
+    /// 
+    /// PlacingCueBall → Aiming → BallsMoving → ProcessingShot → TurnEnd → (back to Aiming or Placing)
+    ///                                                              ↓
+    ///                                                         FrameOver
+    ///                                                              ↓
+    ///                                                          MatchOver
+    /// 
+    /// Each state represents what the game is currently doing:
+    /// - PlacingCueBall: Player clicked in D, positioning white ball
+    /// - Aiming: Ball is placed, player aims and builds shot power
+    /// - BallsMoving: Shot executed, physics running, balls moving
+    /// - ProcessingShot: Balls stopped, checking results (fouls, potted balls, scoring)
+    /// - TurnEnd: Determining if player continues or turn passes
+    /// - FrameOver: All balls potted/tabled, frame result known
+    /// - MatchOver: Enough frames won, match complete
+    /// 
+    /// WHY USE STATE MACHINES?
+    /// 1. CLARITY: Code shows exactly what's happening
+    /// 2. CORRECTNESS: Impossible to perform invalid actions
+    ///    (e.g., can't strike ball while state is FrameOver)
+    /// 3. MAINTAINABILITY: Easy to modify rules by changing state logic
+    /// 4. DEBUGGING: State name tells you exactly where problem is
     /// </summary>
     public enum GameState
     {
@@ -59,12 +91,45 @@ namespace SnookerGame.Engine
     /// <summary>
     /// Manages the overall game flow, rules, and state for the snooker game.
     /// 
-    /// Responsibilities:
-    /// - Track current player and turns
-    /// - Enforce snooker rules (legal shots, fouls, respotting)
-    /// - Manage scoring and breaks
-    /// - Handle frame and match progression
-    /// - Track which ball must be hit next
+    /// === GAME CONTROL ARCHITECTURE FOR A-LEVEL STUDENTS ===
+    /// 
+    /// RESPONSIBILITIES (Single Responsibility Principle):
+    /// This class handles LOGIC and RULES, not graphics or physics.
+    /// 
+    /// 1. GAME STATE MANAGEMENT:
+    ///    Tracks current GameState and enforces valid transitions.
+    ///    Only certain actions are valid in each state.
+    ///    
+    /// 2. PLAYER MANAGEMENT:
+    ///    Tracks which player's turn it is, scores, frames won.
+    ///    
+    /// 3. RULE ENFORCEMENT (Complex algorithm):
+    ///    This is the GAME LOGIC - the most complex part:
+    ///    - Tracking which ball must be hit (target ball)
+    ///    - Detecting fouls (hitting wrong ball, missing, jumping)
+    ///    - Detecting potted balls and awarding points
+    ///    - Managing respotting (where balls go back)
+    ///    - Detecting break end (miss or foul)
+    ///    - Determining turn winner
+    ///    - Checking frame completion
+    ///    - Checking match completion
+    ///    
+    /// 4. SCORE AND BREAK TRACKING:
+    ///    Points from potted balls, penalty points, break streaks.
+    ///    
+    /// INTERACTION WITH OTHER CLASSES:
+    /// PhysicsEngine ← → GameManager ← → Player & UI
+    ///    handles                handles
+    ///    movements          rules & scoring
+    /// 
+    /// SNOOKER RULES SIMPLIFIED:
+    /// - Player hits cue ball to pot other balls
+    /// - Reds (1 pt) then Colours (2-7 pts) alternately until reds gone
+    /// - Miss = turn ends
+    /// - Foul = opponent gets penalty points, turn might end
+    /// - Fouls on reds: minimum 4 points to opponent
+    /// - Fouls on colours: loser gets that colour's point value
+    /// - Match won by first to win required frames (usually best of 3, 5, 7, etc.)
     /// 
     /// This class acts as the central controller, coordinating between
     /// the physics engine, players, and UI.

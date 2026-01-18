@@ -8,15 +8,48 @@ namespace SnookerGame.Models
     /// <summary>
     /// Represents all coloured balls on the snooker table (reds and colours).
     /// 
-    /// This class inherits from Ball and adds:
-    /// - Point values for scoring
-    /// - Distinction between reds and colours
-    /// - Respotting behaviour for colours
-    /// - Permanent removal for reds
+    /// === INHERITANCE AND ENUMS FOR A-LEVEL STUDENTS ===
     /// 
-    /// In snooker:
-    /// - 15 red balls worth 1 point each (not respotted after potting)
-    /// - 6 coloured balls worth 2-7 points (respotted until all reds are gone)
+    /// INHERITANCE:
+    /// Like CueBall, ColouredBall inherits from Ball:
+    /// - Gets: Position, Velocity, Radius, Mass, Colour, IsOnTable, IsMoving
+    /// - Adds: Point values, respotting behavior, ball type
+    /// 
+    /// DIFFERENCE FROM CUEBALL:
+    /// While CueBall specializes in being "strikeable" with aiming,
+    /// ColouredBall specializes in "scoring" with respotting.
+    /// 
+    /// Both are different kinds of balls with different extra responsibilities.
+    /// 
+    /// ENUMS (Enumeration):
+    /// What is an Enum?
+    /// An enum is a type that represents a fixed set of named constants.
+    /// Instead of: int ballType = 1;  // What does 1 mean?
+    /// We write:  BallType.Red;       // Clear meaning!
+    /// 
+    /// WHY USE ENUMS?
+    /// 1. READABILITY: BallType.Yellow is clearer than 2
+    /// 2. TYPE SAFETY: You can only assign valid ball types
+    ///    ballType = BallType.Red;   // OK
+    ///    ballType = 99;              // ERROR: invalid
+    /// 3. AUTOCOMPLETE: IDEs can suggest valid values
+    /// 4. REFACTORING: If you change point values, only change in enum
+    /// 
+    /// ENUM WITH VALUES:
+    /// public enum BallType
+    /// {
+    ///     Red = 1,        // Enum member "Red" has underlying value 1
+    ///     Yellow = 2,     // Enum member "Yellow" has underlying value 2
+    ///     ...
+    /// }
+    /// 
+    /// The underlying value (1, 2, etc.) is also the point value!
+    /// This is efficient design - one constant serves two purposes.
+    /// 
+    /// SNOOKER RULES MODELED HERE:
+    /// - 15 red balls worth 1 point each (not respotted)
+    /// - 6 coloured balls worth 2-7 points (respotted until endgame)
+    /// - This affects game logic and state management
     /// </summary>
     public class ColouredBall : Ball
     {
@@ -24,17 +57,30 @@ namespace SnookerGame.Models
 
         /// <summary>
         /// Enumeration of all ball types with their point values.
-        /// Using an enum makes the code more readable and type-safe.
+        /// 
+        /// ENUM SYNTAX EXPLAINED:
+        /// public enum BallType       // New type that can be used as a variable type
+        /// {
+        ///     Red = 1,               // Member name = underlying integer value
+        ///     Yellow = 2,            // This dual nature (name + value) is powerful
+        /// }
+        /// 
+        /// USAGE:
+        /// BallType myBall = BallType.Yellow;      // Declare variable of enum type
+        /// int pointValue = (int)BallType.Yellow;  // Convert to int: 2
+        /// BallType fromInt = (BallType)5;         // Convert from int: BallType.Blue
+        /// 
+        /// Using enums makes the code more readable and type-safe than using raw integers.
         /// </summary>
         public enum BallType
         {
-            Red = 1,        // 15 on table, not respotted
-            Yellow = 2,     // Respotted until endgame
-            Green = 3,
-            Brown = 4,
-            Blue = 5,
-            Pink = 6,
-            Black = 7
+            Red = 1,        // 15 on table, not respotted, worth 1 point
+            Yellow = 2,     // Respotted during main game, worth 2 points
+            Green = 3,      // Worth 3 points
+            Brown = 4,      // Worth 4 points
+            Blue = 5,       // Worth 5 points
+            Pink = 6,       // Worth 6 points
+            Black = 7       // Worth 7 points, highest value
         }
 
         #endregion
@@ -43,7 +89,21 @@ namespace SnookerGame.Models
 
         /// <summary>
         /// Static method to get the correct colour for each ball type.
+        /// 
+        /// STATIC METHODS EXPLAINED:
+        /// This method belongs to the CLASS, not to individual instances.
+        /// You call it as: ColouredBall.GetColourForType(BallType.Red)
+        /// NOT: ball.GetColourForType(BallType.Red)
+        /// 
+        /// WHY STATIC?
+        /// - The color for each ball type never changes
+        /// - No instance needs its own copy of this logic
+        /// - It's a utility function for the whole class
+        /// - Saves memory - one copy of the code for all instances
+        /// 
         /// Keeps colour definitions in one place for consistency.
+        /// If you want to change Red from Colors.Red to a darker shade,
+        /// you only change it here, and all red balls update automatically.
         /// </summary>
         public static Color GetColourForType(BallType type)
         {
